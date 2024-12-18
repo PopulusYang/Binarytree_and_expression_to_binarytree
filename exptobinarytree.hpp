@@ -165,6 +165,8 @@ BinaryTree<std::string> PostfixtoBT(const std::string &postfix)
             TreeNode<std::string> *operatorNode = new TreeNode<std::string>(item);
             operatorNode->left = leftNode;
             operatorNode->right = rightNode;
+            leftNode->parent = operatorNode;
+            rightNode->parent = operatorNode;
             nodeStack.push(operatorNode);
             i++; 
         }
