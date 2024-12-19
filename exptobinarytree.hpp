@@ -1,16 +1,76 @@
 /*********************************************************
-* @Author: PopulusYang
+* @Author: PopulusYang, marasame
 * filename: exptobinarytree.hpp
-* head needed: binarytree.hpp
+* head needed: binarytree.hpp，
 * description: 将表达式转换为二叉树
 * 食用方法：见read.md
+* updated: 2024/12/19
+* content: 
+1.对虚数的支持
+2.可以将表达式树进行运算（calculate函数）
 **********************************************************/
 
 #pragma once
-
+extern const bool debug;
 #include "binarytree.hpp"
+#include "complex_number.hpp"
+#include <type_traits>
 
 const std::string Ins = "(0";
+
+// 用于存储表达式树节点的数据结构
+struct exporfu
+{
+    bool is_complex = false; // 是否为复数
+    std::aligned_storage_t<sizeof(Complex), alignof(Complex)> complex_storage;//为复数动态地申请空间
+    char fuhao;
+
+    ~exporfu() {
+        if (is_complex)
+        {
+            Complex* complex_ptr = reinterpret_cast<Complex*>(&complex_storage);
+            complex_ptr->~Complex();
+            if (debug)
+            {
+                // std::cout << "complex destructed" << std::endl;
+            }
+        }
+    }
+
+    void construct_complex(const Complex num) {
+        Complex* complex_ptr = new (&complex_storage) Complex(num);
+        is_complex = true;
+    }
+    Complex& get_complex() {
+        return *reinterpret_cast<Complex*>(&complex_storage);
+    }
+};
+std::ostream& operator<<(std::ostream& os, exporfu& exp) 
+{
+    if (exp.is_complex) 
+    {
+        Complex* complex_ptr = reinterpret_cast<Complex*>(&exp.complex_storage);//复原
+        os << *complex_ptr;
+    }
+    else 
+    {
+        os << exp.fuhao;
+    }
+    return os;
+}
+std::stringstream& operator<<(std::stringstream& ss, exporfu& exp)
+{
+    if (exp.is_complex) 
+    {
+        Complex* complex_ptr = reinterpret_cast<Complex*>(&exp.complex_storage);//复原
+        ss << *complex_ptr;
+    }
+    else 
+    {
+        ss << exp.fuhao;
+    }
+    return ss;
+}
 
 void std_expression(std::string &expression)
 {
@@ -84,9 +144,9 @@ std::string infixToPostfix(std::string exp)
         if (isspace(exp[i]))
             continue; // 忽略空格
 
-        if (isdigit(exp[i]) || exp[i] == '.') // 数字
+        if (isdigit(exp[i]) || exp[i] == '.' || exp[i] == 'i') // 数字
         {
-            while (i < exp.length() && (isdigit(exp[i]) || exp[i] == '.'))
+            while (i < exp.length() && (isdigit(exp[i]) || exp[i] == '.'|| exp[i] == 'i'))
             {
                 postfix += exp[i];
                 i++;
@@ -131,9 +191,9 @@ std::string infixToPostfix(std::string exp)
     return postfix;
 }
 //将后缀表达式转换成二叉树
-BinaryTree<std::string> PostfixtoBT(const std::string &postfix)
+BinaryTree<exporfu> PostfixtoBT(const std::string &postfix)
 {
-    std::stack<TreeNode<std::string> *> nodeStack;
+    std::stack<TreeNode<exporfu> *> nodeStack;
     size_t i = 0;
     while (i < postfix.size()) 
     {
@@ -143,13 +203,14 @@ BinaryTree<std::string> PostfixtoBT(const std::string &postfix)
             continue;
         }
         std::string item;
-        if (isdigit(postfix[i]) || postfix[i] == '.') 
+        if (isdigit(postfix[i]) || postfix[i] == '.' ||postfix[i] == 'i') 
         {  // 如果遇到数字或小数点（假设处理浮点数情况，可按需调整），则创建一个节点
-            while (i < postfix.size() && (isdigit(postfix[i]) || postfix[i] == '.')) {
+            while (i < postfix.size() && (isdigit(postfix[i]) || postfix[i] == '.'|| postfix[i] == 'i')) {
                 item += postfix[i];
                 i++;
             }
-            TreeNode<std::string> *node = new TreeNode<std::string>(item);
+            TreeNode<exporfu> *node = new TreeNode<exporfu>;
+            node->data.construct_complex(Complex::strtoComplex(item));
             nodeStack.push(node);
         } else {
             item = postfix[i];  // 将当前运算符字符作为item
@@ -158,11 +219,12 @@ BinaryTree<std::string> PostfixtoBT(const std::string &postfix)
                 std::cerr << "Invalid postfix expression: insufficient operands for operator " << item << std::endl;
                 throw std::runtime_error("Invalid postfix expression");
             }
-            TreeNode<std::string> *rightNode = nodeStack.top();
+            TreeNode<exporfu> *rightNode = nodeStack.top();
             nodeStack.pop();
-            TreeNode<std::string> *leftNode = nodeStack.top();
+            TreeNode<exporfu> *leftNode = nodeStack.top();
             nodeStack.pop();
-            TreeNode<std::string> *operatorNode = new TreeNode<std::string>(item);
+            TreeNode<exporfu> *operatorNode = new TreeNode<exporfu>;
+            operatorNode->data.fuhao = item[0];
             operatorNode->left = leftNode;
             operatorNode->right = rightNode;
             leftNode->parent = operatorNode;
@@ -176,8 +238,45 @@ BinaryTree<std::string> PostfixtoBT(const std::string &postfix)
         std::cerr << "Invalid postfix expression: incorrect number of elements remaining in stack" << std::endl;
         throw std::runtime_error("Invalid postfix expression");
     }
-    TreeNode<std::string> *root = nodeStack.top();
+    TreeNode<exporfu> *root = nodeStack.top();
     nodeStack.pop();
-    BinaryTree<std::string> res(root);
+    BinaryTree<exporfu> res(root);
     return res;  
+}
+
+Complex calculate(TreeNode<exporfu>* root)//输入二叉表达式树的头节点，返回计算结果
+{
+    if (root == nullptr) {
+        throw std::invalid_argument("Null node encountered!");
+    }
+    if (root->left == nullptr && root->right == nullptr) {
+        return root->data.get_complex();
+    }
+
+    Complex leftvalue = calculate(root->left);
+    Complex rightvalue = calculate(root->right);
+
+    if (root->data.fuhao == '+') {
+        return leftvalue + rightvalue;
+    }
+    else if (root->data.fuhao == '-') {
+        return leftvalue - rightvalue;
+    }
+    else if (root->data.fuhao == '*') {
+        return leftvalue * rightvalue;
+    }
+    else if (root->data.fuhao == '/') {
+        if (rightvalue.getImaginary() == 0&&rightvalue.getReal() == 0) 
+        {
+            throw std::invalid_argument("zero error!!!!!!!!!!!!!!!");
+        }
+        else {
+            return leftvalue / rightvalue;
+        }
+    }
+
+    else {
+        throw std::invalid_argument("unknow operator");
+    }
+
 }
