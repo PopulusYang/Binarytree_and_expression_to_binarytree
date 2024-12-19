@@ -43,21 +43,21 @@ typedef int Status;
 #include <vector>
 
 
-
 template <typename T>
 class TreeNode
 {
 public:
     T data;       // 节点存储的数据(字符类型)
-    TreeNode<T> *left;  // 指向左子节点的指针
-    TreeNode<T> *right; // 指向右子节点的指针
-    TreeNode<T> *parent; // 指向双亲节点的指针
+    TreeNode<T> *left = nullptr;  // 指向左子节点的指针
+    TreeNode<T> *right = nullptr; // 指向右子节点的指针
+    TreeNode<T> *parent = nullptr; // 指向双亲节点的指针
     // 构造函数
     TreeNode(T value) : data(value), left(nullptr), right(nullptr),parent(nullptr) 
     {
         if(debug)
             std::cout << "TreeNode(" << this->data << ") is created" << std::endl;
     }
+    TreeNode() {}
     //迭代器左移
     inline Status Iterator_left(TreeNode<T> *&current)
     {
@@ -149,7 +149,8 @@ private:
             std::cout << "    ";
         // 将节点数据转换为字符串输出
         std::stringstream ss;
-        ss << node->data;
+        T Streamdata = node->data;
+        ss << Streamdata;
         std::cout << ss.str() << std::endl;
         //递归处理左子树
         displayTreeHelper(node->left, level + 1);
